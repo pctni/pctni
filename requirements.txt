@@ -1,0 +1,2 @@
+neatnet >= 0.1.2
+parenx >= 0.7.5
