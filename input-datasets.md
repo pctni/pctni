@@ -80,40 +80,36 @@ dplyr::glimpse(od_ni_open)
 
 # Filter out all destinations keeping only those within Northern Ireland
 od_ni_open_filtered = od_ni_open |>
-  filter(workplace_area_code %in% zones_sdz$sdz2021_cd)
-nrow(od_ni_open_filtered) # 110356 vs 110356 
+  filter(workplace_area_code %in% zones_sdz$sdz2021_cd) |>
+  # filter out place_of_work_ind_label not in UK:
+  filter(place_of_work_ind_label == "Working inside UK") |>
+  # Remove the label columns:
+  select(-c(workplace_area_label, area_of_residence_label, place_of_work_ind_label))
+nrow(od_ni_open_filtered) # 108646 vs 110356
 ```
 
-    [1] 110356
+    [1] 108656
 
 ``` r
 summary(od_ni_open_filtered)
 ```
 
-     area_of_residence_code        area_of_residence_label workplace_area_code
-     N21000557:   247       Castlereagh_South_E:   247     N21000251:   827   
-     N21000530:   235       Lisburn_South_E    :   235     N21000192:   808   
-     N21000546:   231       Downshire_East_A   :   231     N21000252:   727   
-     N21000024:   230       Ballyclare_F       :   230     N21000335:   724   
-     N21000777:   227       Comber_G           :   227     N21000198:   694   
-     N21000550:   225       Downshire_East_E   :   225     N21000256:   673   
-     (Other)  :108961       (Other)            :108961     (Other)  :105903   
-     workplace_area_label place_of_work_ind_code
-     Botanic_A:   827     Min.   :1.000         
-     Castle_Q :   808     1st Qu.:4.000         
-     Botanic_B:   727     Median :4.000         
-     Court_X  :   724     Mean   :3.961         
-     Titanic_B:   694     3rd Qu.:4.000         
-     Botanic_F:   673     Max.   :4.000         
-     (Other)  :105903                           
-                    place_of_work_ind_label     count        
-     Mainly work at or from home:   850     Min.   :  1.000  
-     No fixed place             :   850     1st Qu.:  1.000  
-     Working inside UK          :108656     Median :  2.000  
-     Working outside UK         :     0     Mean   :  7.211  
-                                            3rd Qu.:  4.000  
-                                            Max.   :725.000  
-                                                             
+     area_of_residence_code workplace_area_code place_of_work_ind_code
+     N21000557:   245       N21000251:   825    Min.   :4             
+     N21000530:   233       N21000192:   806    1st Qu.:4             
+     N21000546:   229       N21000252:   725    Median :4             
+     N21000024:   228       N21000335:   722    Mean   :4             
+     N21000777:   225       N21000198:   692    3rd Qu.:4             
+     N21000550:   223       N21000256:   671    Max.   :4             
+     (Other)  :107273       (Other)  :104215                          
+         count        
+     Min.   :  1.000  
+     1st Qu.:  1.000  
+     Median :  2.000  
+     Mean   :  5.018  
+     3rd Qu.:  4.000  
+     Max.   :316.000  
+                      
 
 ``` r
 # Upload clean od data as csv:
@@ -130,3 +126,18 @@ plot(zones_sdz$geometry)
 ```
 
 ![](input-datasets_files/figure-commonmark/load-sdz-zones-1.png)
+
+We can visualise the top flows of commonly-cycled distances (2-5 km)
+using a flow map:
+
+![](images/paste-1.png)
+
+This compares with the original input dataset as follows:
+
+2011 SOA level data (890 zones)
+
+![](images/paste-2.png)
+
+Open access 2021 SDZ level data imported from links above (850 zones)
+
+![](images/paste-3.png)

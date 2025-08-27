@@ -5,7 +5,6 @@ execute:
   echo: false
 ---
 
-
 ```{r}
 #| label: load-pkgs
 #| include: false
@@ -61,8 +60,6 @@ gh release create v1.0.0
 gh release upload v1.0.0 2021_OD_NI_OPEN_V1.zip
 ```
 
-
-
 ```{r}
 #| label: download-open-data
 unzip("2021_OD_NI_OPEN_V1.zip", exdir = "data/2021_OD_NI_OPEN_V1")
@@ -82,8 +79,6 @@ list.files("data/geography-sdz2021-geojson")
 # Re-upload data to GitHub
 system("gh release upload v1.0.0 data/geography-sdz2021-geojson/SDZ2021.geojson")
 ```
-
-
 
 ```{r}
 #| eval: true
@@ -129,8 +124,12 @@ dplyr::glimpse(od_ni_open)
 
 # Filter out all destinations keeping only those within Northern Ireland
 od_ni_open_filtered = od_ni_open |>
-  filter(workplace_area_code %in% zones_sdz$sdz2021_cd)
-nrow(od_ni_open_filtered) # 110356 vs 110356 
+  filter(workplace_area_code %in% zones_sdz$sdz2021_cd) |>
+  # filter out place_of_work_ind_label not in UK:
+  filter(place_of_work_ind_label == "Working inside UK") |>
+  # Remove the label columns:
+  select(-c(workplace_area_label, area_of_residence_label, place_of_work_ind_label))
+nrow(od_ni_open_filtered) # 108646 vs 110356
 summary(od_ni_open_filtered)
 # Upload clean od data as csv:
 write_csv(od_ni_open_filtered, "od_ni_open_filtered.csv")
@@ -139,3 +138,47 @@ sf::write_sf(zones_sdz, "zones_sdz.gpkg", delete_dsn = TRUE)
 system("gh release upload v1.0.0 zones_sdz.gpkg od_ni_open_filtered.csv")
 plot(zones_sdz$geometry)
 ```
+
+We can visualise the top flows of commonly-cycled distances (2-5 km) using a flow map:
+
+```{r}
+od_sf = od::od_to_sf(od_ni_open_filtered, zones_sdz)
+od_sf$length_km = as.numeric(sf::st_length(od_sf)) / 1000
+od_sf = od_sf |>
+  filter(length_km >= 2 & length_km <= 5) |>
+  arrange(desc(count)) |>
+  dplyr::slice(1:1000)
+mapview::mapview(zones_sdz) +
+  mapview::mapview(od_sf) 
+```
+
+![](images/paste-1.png)
+
+This compares with the original input dataset as follows:
+
+```{r}
+od_top = sf::read_sf("../backend/od_2011.gpkg")
+names(od_top)
+#  [1] "o"             "d"             "mfh"           "metro"
+#  [5] "train"         "bus"           "taxi"          "moto"
+#  [9] "car_driver"    "car_passenger" "bicycle"       "foot"
+# [13] "other"         "X14"           "geom"
+od_top$length_km = as.numeric(sf::st_length(od_top)) / 1000
+od_top_1000 = od_top |>
+  filter(length_km >= 2 & length_km <= 5) |>
+  arrange(desc(bicycle)) |>
+  slice(1:1000)
+zones_soa = sf::read_sf("../backend/SOA2011_simplified.geojson")
+mapview::mapview(zones_soa) + 
+  mapview::mapview(od_top_1000)
+nrow(zones_soa)
+nrow(zones_sdz)
+```
+
+2011 SOA level data (890 zones)
+
+![](images/paste-2.png)
+
+Open access 2021 SDZ level data imported from links above (850 zones)
+
+![](images/paste-3.png)
