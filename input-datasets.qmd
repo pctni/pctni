@@ -1,0 +1,141 @@
+---
+format: gfm
+execute: 
+  eval: false
+  echo: false
+---
+
+
+```{r}
+#| label: load-pkgs
+#| include: false
+#| eval: true
+library(tidyverse)
+```
+
+```{r}
+# 2011 OD data: https://wicid.ukdataservice.ac.uk/cider/wicid/downloads.php
+# From 2011 Census United Kingdom - Safeguarded
+# MSOA/SOA/Intermediate Zone
+file.copy("~/data/wicid/WU03UK_msoa_v3.zip", "data/WU03UK_msoa_v3.zip")
+od_2011_raw = read_csv("data/WU03UK_msoa_v3.zip")
+summary(od_2011_raw)
+# 1Area of residence 2Area of workplace 3All categories: Method of travel to work 4Work mainly at or from home 5Underground, metro, light rail, tram 6Train 7Bus, minibus or coach 8Taxi 9Motorcycle, scooter or moped 10Driving a car or van 11Passenger in a car or van 12Bicycle 13On foot 14Other method of travel to work
+col_names = c(
+  "o",
+  "d",
+  "mfh",
+  "metro",
+  "train",
+  "bus",
+  "taxi",
+  "moto",
+  "car_driver",
+  "car_passenger",
+  "bicycle",
+  "foot",
+  "other"
+)
+od_2011_raw = read_csv("data/WU03UK_msoa_v3.zip", col_names = col_names)
+u_soa_2011 = "https://www.nisra.gov.uk/sites/nisra.gov.uk/files/publications/SOA2011_Esri_Shapefile_0.zip"
+download.file(u_soa_2011, "data/SOA2011_Esri_Shapefile_0.zip")
+unzip("data/SOA2011_Esri_Shapefile_0.zip", exdir = "data/SOA2011_Esri_Shapefile_0")
+soa_2011 = sf::read_sf("data/SOA2011_Esri_Shapefile_0/SOA2011.shp")
+plot(soa_2011$geometry)
+soa_2011 = rmapshaper::ms_simplify(soa_2011, keep = 0.005)
+soa_2011 = sf::st_transform(soa_2011, 4326)
+sf::write_sf(soa_2011, "SOA2011_simplified.geojson", delete_dsn = TRUE)
+fs::file_size("SOA2011_simplified.geojson")
+summary(soa_2011$SOA_CODE %in% od_2011_raw$o)
+summary(soa_2011$SOA_CODE %in% od_2011_raw$d) # 100% match
+od_2011 = od::od_to_sf(od_2011_raw, soa_2011)
+sf::write_sf(od_2011, "od_2011.gpkg")
+```
+
+# Open access data
+
+To get open access OD data for Northern Ireland, go to https://wicid.ukdataservice.ac.uk/cider/wicid/downloads.php, click on Start a new session - no username or password required, then download the 2021_OD_NI_OPEN link.
+
+```{sh}
+gh release create v1.0.0
+gh release upload v1.0.0 2021_OD_NI_OPEN_V1.zip
+```
+
+
+
+```{r}
+#| label: download-open-data
+unzip("2021_OD_NI_OPEN_V1.zip", exdir = "data/2021_OD_NI_OPEN_V1")
+list.files("data/2021_OD_NI_OPEN_V1")
+# [1] "Census 2021 origin-destination migrant tables (ROI)"
+# [2] "Census 2021 origin-destination migrant tables (UK)"
+# [3] "Census 2021 origin-destination place of work tables (ROI)"
+# [4] "Census 2021 origin-destination place of work tables (UK)"
+# [5] "Census 2021 origin-destination student tables"
+list.files("data/2021_OD_NI_OPEN_V1/Census 2021 origin-destination place of work tables (UK)/")
+
+u = "https://www.nisra.gov.uk/files/nisra/publications/geography-sdz2021-geojson.zip"
+f = basename(u)
+download.file(u, f)
+unzip(f, exdir = "data/geography-sdz2021-geojson")
+list.files("data/geography-sdz2021-geojson")
+# Re-upload data to GitHub
+system("gh release upload v1.0.0 data/geography-sdz2021-geojson/SDZ2021.geojson")
+```
+
+
+
+```{r}
+#| eval: true
+#| echo: true
+#| label: load-sdz-zones
+zones_sdz = sf::read_sf("data/geography-sdz2021-geojson/SDZ2021.geojson")
+zones_sdz = zones_sdz |>
+  rename_with(~ tolower(gsub(" ", "_", .x)))
+od_ni_open = read_csv("data/2021_OD_NI_OPEN_V1/Census 2021 origin-destination place of work tables (UK)/ODWP01NI-UK-SDZ.csv")
+od_ni_open = od_ni_open |>
+  mutate(across(where(is.character), as.factor)) |>
+  rename_with(~ tolower(gsub(" ", "_", .x)))
+
+od_ni_open |>
+  slice(1:2) |>
+  knitr::kable()
+dplyr::glimpse(od_ni_open)
+
+# summary(od_ni_open)
+# #  area_of_residence_code        area_of_residence_label workplace_area_code
+# #  N21000557:   259       Castlereagh_South_E:   259     N21000251:   827       
+# #  N21000530:   245       Lisburn_South_E    :   245     999999999:   821       
+# #  N21000550:   244       Downshire_East_E   :   244     N21000192:   808       
+# #  N21000546:   240       Downshire_East_A   :   240     N21000252:   727       
+# #  N21000024:   238       Ballyclare_F       :   238     N21000335:   724       
+# #  N21000517:   236       Comber_G           :   236     N21000198:   694       
+# #  (Other)  :114738       (Other)            :114738     (Other)  :111599       
+# #                workplace_area_label place_of_work_ind_code
+# #  Botanic_A               :   827    Min.   :1.000
+# #  Workplace outside the UK:   821    1st Qu.:4.000
+# #  Castle_Q                :   808    Median :4.000
+# #  Botanic_B               :   727    Mean   :3.947
+# #  Court_X                 :   724    3rd Qu.:4.000
+# #  Titanic_B               :   694    Max.   :4.000
+# #  (Other)                 :111599
+# #                 place_of_work_ind_label     count
+# #  Mainly work at or from home:   850     Min.   :  1.000
+# #  No fixed place             :  1414     1st Qu.:  1.000
+# #  Working inside UK          :113115     Median :  2.000
+# #  Working outside UK         :   821     Mean   :  7.005
+# #                                         3rd Qu.:  4.000
+# #                                         Max.   :725.000
+
+# Filter out all destinations keeping only those within Northern Ireland
+od_ni_open_filtered = od_ni_open |>
+  filter(workplace_area_code %in% zones_sdz$sdz2021_cd)
+nrow(od_ni_open_filtered) # 110356 vs 110356 
+summary(od_ni_open_filtered)
+# Upload clean od data as csv:
+write_csv(od_ni_open_filtered, "od_ni_open_filtered.csv")
+# And save geo data as gpkg:
+sf::write_sf(zones_sdz, "zones_sdz.gpkg", delete_dsn = TRUE)
+system("gh release upload v1.0.0 zones_sdz.gpkg od_ni_open_filtered.csv")
+plot(zones_sdz$geometry)
+```
